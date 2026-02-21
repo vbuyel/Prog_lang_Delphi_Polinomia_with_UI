@@ -1,0 +1,637 @@
+unit Polinomia;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls;
+
+type
+  TMainWorkPolinomia = class(TForm)
+    EDegree: TEdit;
+    ERate: TEdit;
+    LDegree: TLabel;
+    LRate: TLabel;
+    BAddX: TButton;
+    LWillBeAdded: TLabel;
+    LAX: TLabel;
+    LB: TLabel;
+    EPolinomia: TEdit;
+    BBackToMM: TButton;
+    LFirstCompare: TLabel;
+    LCompare: TLabel;
+    EFirstCompPolin: TEdit;
+    LSecondCompare: TLabel;
+    ESecondCompPolin: TEdit;
+    BLeftFirstCompare: TButton;
+    BRightFirstCompare: TButton;
+    BLeftSecondCompare: TButton;
+    BRightSecondCompare: TButton;
+    LIsSamePolin: TLabel;
+    ECompareTF: TEdit;
+    Label1: TLabel;
+    Label2: TLabel;
+    EXFindY: TEdit;
+    Label3: TLabel;
+    EFindY: TEdit;
+    BLeftFindY: TButton;
+    BRightFindY: TButton;
+    Label4: TLabel;
+    EResY: TEdit;
+    Label5: TLabel;
+    Label6: TLabel;
+    Label7: TLabel;
+    EFirstAddPolinom: TEdit;
+    ESecondAddPolinom: TEdit;
+    BLeftFirstAddPolinom: TButton;
+    BRightFirstAddPolinom: TButton;
+    BLeftSecondAddPolinom: TButton;
+    BRightSecondAddPolinom: TButton;
+    Button7: TButton;
+    EResAddition: TEdit;
+    Label8: TLabel;
+    BCompare: TButton;
+    Button9: TButton;
+    BSolve: TButton;
+    LAmountOfX: TLabel;
+    Button11: TButton;
+    procedure BAddXClick(Sender: TObject);
+    procedure BBackToMMClick(Sender: TObject);
+    procedure Button9Click(Sender: TObject);
+    procedure Button11Click(Sender: TObject);
+    procedure BRightFirstCompareClick(Sender: TObject);
+    procedure BRightSecondCompareClick(Sender: TObject);
+    procedure BRightFindYClick(Sender: TObject);
+    procedure BRightFirstAddPolinomClick(Sender: TObject);
+    procedure BRightSecondAddPolinomClick(Sender: TObject);
+    procedure BLeftFirstCompareClick(Sender: TObject);
+    procedure BLeftSecondCompareClick(Sender: TObject);
+    procedure BLeftFindYClick(Sender: TObject);
+    procedure BLeftFirstAddPolinomClick(Sender: TObject);
+    procedure BLeftSecondAddPolinomClick(Sender: TObject);
+    procedure BCompareClick(Sender: TObject);
+    procedure BSolveClick(Sender: TObject);
+    procedure Button7Click(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+Type
+  CurrX = ^CompOfX;
+  CurrPolinom = ^ThisPolinom;
+
+  CompOfX = Record
+    Degree: integer;
+    Rate: double;
+    NextX: CurrX;
+  End;
+
+  ThisPolinom = Record
+    PrevPolinom: CurrPolinom;
+    Polinom: CurrX;
+    NextPolinom: CurrPolinom;
+  End;
+
+
+Var
+  LastX, CurrentX: CurrX;
+  ErrorCode, ErrorCodeDegree, ErrorCodeRate: integer;
+  ListOfPolinom, LastPolinom: CurrPolinom;
+
+implementation
+
+{$R *.dfm}
+
+Uses MainForm, Math;
+
+Var
+  XInOnePolinCounter: integer = 0;
+  Flag: boolean;
+  TempList: CurrX;
+    FirstCurrentTemp, SecondCurrentTemp,
+    FirstAddTemp, SecondAddTemp,
+    SolvePolinomTemp: CurrPolinom;
+  AdditionalPolinom: CurrPolinom;
+  FirstComparePolinom, SecondComparePolinom,
+    FirstAddPolinom, SecondAddPolinom,
+    SolvePolinom: CurrPolinom;
+
+function Equality(FPolinom, SPolinom: CurrPolinom): boolean; // Проверка на равенство многочленов
+var
+  Term1, Term2: CurrX;
+const
+  Epsilon = 1e-10;
+begin
+  if (FPolinom = nil) or (SPolinom = nil) then
+    Exit(FPolinom = SPolinom);
+
+  Term1 := FPolinom.Polinom;
+  Term2 := SPolinom.Polinom;
+
+  while (Term1 <> nil) and (Term2 <> nil) do
+  begin
+    if (Term1.Degree <> Term2.Degree) or
+       (Abs(Term1.Rate - Term2.Rate) > Epsilon) then
+      Exit(False);
+
+    Term1 := Term1.NextX;
+    Term2 := Term2.NextX;
+  end;
+
+  Result := (Term1 = nil) and (Term2 = nil);
+end;
+
+function Meaning(PolinomToFindY: CurrPolinom; X: double): double; // Значение многочлена в точке X
+var
+  Term: CurrX;
+begin
+  Result := 0.0;
+  Term := PolinomToFindY.Polinom;
+
+  while Term <> nil do
+  begin
+    if Term.Degree >= 0 then
+      Result := Result + Term.Rate * Power(X, Term.Degree)
+    else
+      Result := Result + Term.Rate / Power(X, Abs(Term.Degree));
+    Term := Term.NextX;
+  end;
+end;
+
+procedure Add(FPolinom, SPolinom: CurrPolinom; var Result: CurrPolinom); // Сумма многочленов
+var
+  Term1, Term2, NewTerm, LastTerm: CurrX;
+  NewPolinom: CurrPolinom;
+begin
+  New(NewPolinom);
+  NewPolinom^.PrevPolinom := nil;
+  NewPolinom^.NextPolinom := nil;
+  NewPolinom^.Polinom := nil;
+  LastTerm := nil;
+
+  Term1 := nil;
+  Term2 := nil;
+
+  if (FPolinom <> nil) then Term1 := FPolinom^.Polinom;
+  if (SPolinom <> nil) then Term2 := SPolinom^.Polinom;
+
+  while (Term1 <> nil) or (Term2 <> nil) do
+  begin
+    New(NewTerm);
+    NewTerm^.NextX := nil;
+
+    if (Term1 <> nil) and ((Term2 = nil) or (Term1^.Degree > Term2^.Degree)) then
+    begin
+      // Берем член из первого многочлена
+      NewTerm^.Degree := Term1^.Degree;
+      NewTerm^.Rate := Term1^.Rate;
+      Term1 := Term1^.NextX;
+    end
+    else if (Term2 <> nil) and ((Term1 = nil) or (Term2^.Degree > Term1^.Degree)) then
+    begin
+      // Берем член из второго многочлена
+      NewTerm^.Degree := Term2^.Degree;
+      NewTerm^.Rate := Term2^.Rate;
+      Term2 := Term2^.NextX;
+    end
+    else
+    begin
+      // Складываем члены с одинаковыми степенями
+      NewTerm^.Degree := Term1^.Degree;
+      NewTerm^.Rate := Term1^.Rate + Term2^.Rate;
+      Term1 := Term1^.NextX;
+      Term2 := Term2^.NextX;
+    end;
+
+    // Добавляем новый член в результат
+    if NewPolinom^.Polinom = nil then
+    begin
+      NewPolinom^.Polinom := NewTerm;
+      LastTerm := NewTerm;
+    end
+    else
+    begin
+      LastTerm^.NextX := NewTerm;
+      LastTerm := NewTerm;
+    end;
+  end;
+
+  // Возвращаем результат
+  Result := NewPolinom;
+end;
+
+
+
+// -----------------------------------------------------------------------------
+
+procedure NextPolinomToEdit(EPolinom: TEdit; BNext: TButton; FListPolin: CurrPolinom);
+var
+  FirstRun: boolean;
+  CurrentTemp: CurrX;
+begin
+  FirstRun := False;
+  EPolinom.Text := '';
+
+  if (FListPolin = nil) or (FListPolin^.Polinom = nil) then
+  begin
+    EPolinom.Text := '0';
+    BNext.Enabled := False;
+    Exit;
+  end;
+
+  CurrentTemp := FListPolin^.Polinom;
+
+  while CurrentTemp <> nil do
+  begin
+    if not FirstRun then
+    begin
+      EPolinom.Text := FloatToStr(CurrentTemp.Rate) + 'x^(' + IntToStr(CurrentTemp.Degree) + ')';
+      FirstRun := True;
+    end
+    else
+      EPolinom.Text := EPolinom.Text + ' + ' + FloatToStr(CurrentTemp.Rate) + 'x^(' + IntToStr(CurrentTemp.Degree) + ')';
+    CurrentTemp := CurrentTemp.NextX;
+  end;
+
+  FListPolin := FListPolin.NextPolinom;
+  BNext.Enabled := (FListPolin <> nil);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure PrevPolinomToEdit(EPolinom: TEdit; BPrev: TButton; FListPolin: CurrPolinom);
+var
+  FirstRun: boolean;
+  CurrentTemp: CurrX;
+begin
+  FirstRun := False;
+  EPolinom.Text := '';
+
+  if (FListPolin = nil) or (FListPolin^.Polinom = nil) then
+  begin
+    EPolinom.Text := '0';
+    BPrev.Enabled := False;
+    Exit;
+  end;
+
+  CurrentTemp := FListPolin^.Polinom;
+
+  while CurrentTemp <> nil do
+  begin
+    if not FirstRun then
+    begin
+      if (CurrentTemp.Rate > 0) and (CurrentTemp.Degree > 0) then
+        EPolinom.Text := FloatToStr(CurrentTemp.Rate) + 'x^(' + IntToStr(CurrentTemp.Degree) + ')'
+      else if (CurrentTemp.Rate < 0) and (CurrentTemp.Degree > 0) then
+        EPolinom.Text := '-' + FloatToStr(CurrentTemp.Rate) + 'x^(' + IntToStr(CurrentTemp.Degree) + ')'
+      else if (CurrentTemp.Rate > 0) and (CurrentTemp.Degree < 0) then
+        EPolinom.Text := FloatToStr(CurrentTemp.Rate) + 'x^(-' + IntToStr(CurrentTemp.Degree) + ')'
+      else
+        EPolinom.Text := '-' + FloatToStr(CurrentTemp.Rate) + 'x^(-' + IntToStr(CurrentTemp.Degree) + ')';
+
+      FirstRun := True;
+    end
+    else
+    begin
+      if (CurrentTemp.Rate > 0) and (CurrentTemp.Degree > 0) then
+        EPolinom.Text := EPolinom.Text + FloatToStr(CurrentTemp.Rate) + 'x^(' + IntToStr(CurrentTemp.Degree) + ')'
+      else if (CurrentTemp.Rate < 0) and (CurrentTemp.Degree > 0) then
+        EPolinom.Text := EPolinom.Text + ' - ' + FloatToStr(CurrentTemp.Rate) + 'x^(' + IntToStr(CurrentTemp.Degree) + ')'
+      else if (CurrentTemp.Rate > 0) and (CurrentTemp.Degree < 0) then
+        EPolinom.Text := EPolinom.Text +  FloatToStr(CurrentTemp.Rate) + 'x^(-' + IntToStr(CurrentTemp.Degree) + ')'
+      else
+        EPolinom.Text := EPolinom.Text + ' - ' + FloatToStr(CurrentTemp.Rate) + 'x^(-' + IntToStr(CurrentTemp.Degree) + ')';
+    end;
+
+    CurrentTemp := CurrentTemp.NextX;
+  end;
+
+  FListPolin := FListPolin.PrevPolinom;
+  BPrev.Enabled := (FListPolin <> nil);
+end;
+
+// -----------------------------------------------------------------------------
+
+
+procedure TMainWorkPolinomia.BAddXClick(Sender: TObject);
+begin
+  New(LastX);
+  LastX^.NextX := nil;
+
+  EDegree.Text := Trim(EDegree.Text);
+  val(EDegree.Text, LastX^.Degree, ErrorCodeDegree);
+  If length(EDegree.Text) = 0 then ErrorCodeDegree := 1;
+  If ErrorCodeDegree > 0 then
+    ShowMessage('Введите целое число в степени. Играем по моим правилам :)');
+
+  ERate.Text := Trim(ERate.Text);
+  val(ERate.Text, LastX^.Rate, ErrorCodeRate);
+  If length(EDegree.Text) = 0 then ErrorCodeRate := 1;
+  If ErrorCodeRate > 0 then
+    ShowMessage('Введите число в поле для коэффицента. Хорошая попытка');
+
+  ErrorCode := ErrorCodeDegree + ErrorCodeRate;
+
+  if ErrorCode > 0 then Dispose(LastX);
+
+  If (ErrorCode = 0) and (ERate.Text <> '0') then
+  Begin
+    TempList := CurrentX;
+
+    If XInOnePolinCounter > 0 then
+    Begin
+      LastX := CurrentX;
+      Flag := False;
+
+      While LastX <> nil do
+      Begin
+        if EDegree.Text = IntToStr(LastX^.Degree) then
+        begin
+          LastX^.Rate := LastX^.Rate + StrToInt(ERate.Text);
+          Flag := True;
+
+          LastX := TempList;
+
+          EPolinomia.Text := '';
+          while LastX <> nil do
+          begin
+            if EPolinomia.Text = '' then
+            begin
+              if (LastX.Rate > 0) and (LastX.Degree > 0) then
+                EPolinomia.Text := FloatToStr(LastX.Rate) + 'x^(' + IntToStr(LastX.Degree) + ')'
+              else if (LastX.Rate < 0) and (LastX.Degree > 0) then
+                EPolinomia.Text := '-' + FloatToStr(Abs(LastX.Rate)) + 'x^(' + IntToStr(LastX.Degree) + ')'
+              else if (LastX.Rate > 0) and (LastX.Degree < 0) then
+                EPolinomia.Text := FloatToStr(LastX.Rate) + 'x^(-' + IntToStr(Abs(LastX.Degree)) + ')'
+              else
+                EPolinomia.Text := '-' + FloatToStr(Abs(LastX.Rate)) + 'x^(-' + IntToStr(Abs(LastX.Degree)) + ')';
+            end
+            else
+            begin
+              if (LastX.Rate > 0) and (LastX.Degree > 0) then
+                EPolinomia.Text := EPolinomia.Text + FloatToStr(LastX.Rate) + 'x^(' + IntToStr(LastX.Degree) + ')'
+              else if (LastX.Rate < 0) and (LastX.Degree > 0) then
+                EPolinomia.Text := EPolinomia.Text + ' - ' + FloatToStr(Abs(LastX.Rate)) + 'x^(' + IntToStr(LastX.Degree) + ')'
+              else if (LastX.Rate > 0) and (LastX.Degree < 0) then
+                EPolinomia.Text := EPolinomia.Text +  FloatToStr(LastX.Rate) + 'x^(-' + IntToStr(Abs(LastX.Degree)) + ')'
+              else
+                EPolinomia.Text := EPolinomia.Text + ' - ' + FloatToStr(Abs(LastX.Rate)) + 'x^(-' + IntToStr(Abs(LastX.Degree)) + ')';
+            end;
+
+            LastX := LastX^.NextX;
+          end;
+        end
+        else if LastX^.NextX = nil then
+        begin
+          if EPolinomia.Text = '' then
+          begin
+            if (StrToFloat(ERate.Text) > 0) and (StrToInt(EDegree.Text) > 0) then
+              EPolinomia.Text := ERate.Text + 'x^(' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+            else if (StrToFloat(ERate.Text) < 0) and (StrToInt(EDegree.Text) > 0) then
+              EPolinomia.Text := '-' + FloatToStr(Abs(StrToFloat(ERate.Text))) + 'x^(' + EDegree.Text + ')'
+            else if (StrToFloat(ERate.Text) > 0) and (StrToInt(EDegree.Text) < 0) then
+              EPolinomia.Text := ERate.Text + 'x^(-' + IntToStr(Abs(StrToInt(EDegree.Text))) + ')'
+            else
+              EPolinomia.Text := '-' + FloatToStr(Abs(StrToFloat(ERate.Text))) + 'x^(-' + IntToStr(Abs(StrToInt(EDegree.Text))) + ')';
+          end
+          else
+          begin
+            if (StrToFloat(ERate.Text) > 0) and (StrToInt(EDegree.Text) > 0) then
+              EPolinomia.Text := EPolinomia.Text + ' + ' + ERate.Text + 'x^(' + EDegree.Text + ')'
+            else if (StrToFloat(ERate.Text) < 0) and (StrToInt(EDegree.Text) > 0) then
+              EPolinomia.Text := EPolinomia.Text + ' - ' + FloatToStr(Abs(StrToFloat(ERate.Text))) + 'x^(' + EDegree.Text + ')'
+            else if (StrToFloat(ERate.Text) > 0) and (StrToInt(EDegree.Text) < 0) then
+              EPolinomia.Text := EPolinomia.Text + ' + ' + ERate.Text + 'x^(-' + IntToStr(Abs(StrToInt(EDegree.Text))) + ')'
+            else
+              EPolinomia.Text := EPolinomia.Text + ' - ' + FloatToStr(Abs(StrToFloat(ERate.Text))) + 'x^(-' + IntToStr(Abs(StrToInt(EDegree.Text))) + ')';
+          end;
+
+          LastX := LastX^.NextX;
+        end
+        else LastX := LastX^.NextX;
+      End
+    End
+    Else EPolinomia.Text := ERate.Text + 'x^(' + EDegree.Text + ')';
+
+    If not Flag then
+    Begin
+      if LastX <> nil then Dispose(LastX);
+
+      New(LastX);
+      LastX^.Rate := StrToFloat(ERate.Text);
+      LastX^.Degree := StrToInt(EDegree.Text);
+
+      If CurrentX = nil then CurrentX := LastX
+      Else
+      Begin
+        LastX^.NextX := CurrentX;
+        CurrentX := LastX;
+        TempList := CurrentX;
+      End;
+
+      Inc(XInOnePolinCounter);
+      if XInOnePolinCounter mod 10 = 1 then LAmountOfX.Caption := 'Введён ' + IntToStr(XInOnePolinCounter) + ' член уравнения'
+      else if (XInOnePolinCounter mod 10 > 1) and (XInOnePolinCounter mod 10 <= 4)
+        and ((XInOnePolinCounter mod 100 < 10) Or (XInOnePolinCounter mod 100 >= 20)) then LAmountOfX.Caption := 'Введено ' + IntToStr(XInOnePolinCounter) + ' члена уравнения'
+      else LAmountOfX.Caption := 'Введено ' + IntToStr(XInOnePolinCounter) + ' членов уравнения';
+    End;
+  End;
+end;
+
+procedure TMainWorkPolinomia.BBackToMMClick(Sender: TObject);
+begin
+  MainWorkPolinomia.Hide;
+  LogIn.Show;
+end;
+
+procedure TMainWorkPolinomia.BCompareClick(Sender: TObject);
+begin
+  if Equality(FirstCurrentTemp, SecondCurrentTemp) then ECompareTF.Text := 'Да'
+  else ECompareTF.Text := 'Нет'
+end;
+
+procedure TMainWorkPolinomia.BLeftFindYClick(Sender: TObject);
+begin
+  SolvePolinom := SolvePolinomTemp^.PrevPolinom;
+  SolvePolinomTemp := SolvePolinom;
+  PrevPolinomToEdit(EFindY, BLeftFindY, SolvePolinomTemp);
+  BRightFindY.Enabled := (SolvePolinomTemp^.NextPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BLeftFirstAddPolinomClick(Sender: TObject);
+begin
+  FirstAddPolinom := FirstAddTemp^.PrevPolinom;
+  FirstAddTemp := FirstAddPolinom;
+  PrevPolinomToEdit(EFirstAddPolinom, BLeftFirstAddPolinom, FirstAddTemp);
+  BRightFirstAddPolinom.Enabled := (FirstAddTemp^.NextPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BLeftFirstCompareClick(Sender: TObject);
+begin
+  FirstComparePolinom := FirstCurrentTemp^.PrevPolinom;
+  FirstCurrentTemp := FirstComparePolinom;
+  PrevPolinomToEdit(EFirstCompPolin, BLeftFirstCompare, FirstCurrentTemp);
+  BRightFirstCompare.Enabled := (FirstCurrentTemp^.NextPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BLeftSecondAddPolinomClick(Sender: TObject);
+begin
+  SecondAddPolinom := SecondAddTemp^.PrevPolinom;
+  SecondAddTemp := SecondAddPolinom;
+  PrevPolinomToEdit(ESecondAddPolinom, BLeftSecondAddPolinom, SecondAddTemp);
+  BRightSecondAddPolinom.Enabled := (SecondAddTemp^.NextPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BLeftSecondCompareClick(Sender: TObject);
+begin
+  SecondComparePolinom := SecondCurrentTemp^.PrevPolinom;
+  SecondCurrentTemp := SecondComparePolinom;
+  PrevPolinomToEdit(ESecondCompPolin, BLeftSecondCompare, SecondCurrentTemp);
+  BRightSecondCompare.Enabled := (SecondCurrentTemp^.NextPolinom <> nil);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure TMainWorkPolinomia.BRightFindYClick(Sender: TObject);
+begin
+  SolvePolinomTemp := SolvePolinom;
+  NextPolinomToEdit(EFindY, BRightFindY, SolvePolinomTemp);
+  SolvePolinom := SolvePolinom^.NextPolinom;
+  BLeftFindY.Enabled := (SolvePolinomTemp^.PrevPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BRightFirstAddPolinomClick(Sender: TObject);
+begin
+  FirstAddTemp := FirstAddPolinom;
+  NextPolinomToEdit(EFirstAddPolinom, BRightFirstAddPolinom, FirstAddTemp);
+  FirstAddPolinom := FirstAddPolinom^.NextPolinom;
+  BLeftFirstAddPolinom.Enabled := (FirstAddTemp^.PrevPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BRightFirstCompareClick(Sender: TObject);
+begin
+  FirstCurrentTemp := FirstComparePolinom;
+  NextPolinomToEdit(EFirstCompPolin, BRightFirstCompare, FirstCurrentTemp);
+  FirstComparePolinom := FirstComparePolinom^.NextPolinom;
+  BLeftFirstCompare.Enabled := (FirstCurrentTemp^.PrevPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BRightSecondAddPolinomClick(Sender: TObject);
+begin
+  SecondAddTemp := SecondAddPolinom;
+  NextPolinomToEdit(ESecondAddPolinom, BRightSecondAddPolinom, SecondAddTemp);
+  SecondAddPolinom := SecondAddPolinom^.NextPolinom;
+  BLeftSecondAddPolinom.Enabled := (SecondAddTemp^.PrevPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BRightSecondCompareClick(Sender: TObject);
+begin
+  SecondCurrentTemp := SecondComparePolinom;
+  NextPolinomToEdit(ESecondCompPolin, BRightSecondCompare, SecondCurrentTemp);
+  SecondComparePolinom := SecondComparePolinom^.NextPolinom;
+  BLeftSecondCompare.Enabled := (SecondCurrentTemp^.PrevPolinom <> nil);
+end;
+
+procedure TMainWorkPolinomia.BSolveClick(Sender: TObject);
+var X: double;
+begin
+  val(EXFindY.Text, X, ErrorCode);
+  if ErrorCode > 0 then
+  begin
+    ShowMessage('Введите корректное значение для X. Вы меня не обманите -_-');
+    ErrorCode := 0;
+    Exit;
+  end;
+
+  EResY.Text := FloatToStr(Meaning(SolvePolinomTemp, X));
+
+  if EResY.Text = 'INF' then
+    ShowMessage('Слишком большое значение... Мы работаем над этим :)');
+
+end;
+
+procedure TMainWorkPolinomia.Button11Click(Sender: TObject);
+begin
+  if CurrentX <> nil then
+  begin
+    New(LastPolinom);
+    LastPolinom^.PrevPolinom := nil;
+    LastPolinom^.Polinom := CurrentX;
+    LastPolinom^.NextPolinom := nil;
+
+    If ListOfPolinom = nil then ListOfPolinom := LastPolinom
+    Else
+    Begin
+      LastPolinom^.NextPolinom := ListOfPolinom;
+      ListOfPolinom^.PrevPolinom := LastPolinom;
+      ListOfPolinom := LastPolinom;
+    End;
+    FirstComparePolinom := ListOfPolinom;
+    SecondComparePolinom := ListOfPolinom;
+    FirstAddPolinom := ListOfPolinom;
+    SecondAddPolinom := ListOfPolinom;
+    SolvePolinom := ListOfPolinom;
+
+    CurrentX := nil;
+  end;
+
+  LAmountOfX.Caption := 'Введено 0 членов уравнения';
+  XInOnePolinCounter := 0;
+
+  EPolinomia.Text := '';
+  Flag := False;
+
+  BRightFirstCompare.Enabled := True;
+  BRightSecondCompare.Enabled := True;
+
+  BRightFindY.Enabled := True;
+
+  BRightFirstAddPolinom.Enabled := True;
+  BRightSecondAddPolinom.Enabled := True;
+end;
+
+procedure TMainWorkPolinomia.Button7Click(Sender: TObject);
+var StartPrint: boolean;
+begin
+  Add(FirstAddTemp, SecondAddTemp, AdditionalPolinom);
+  StartPrint := True;
+
+  while AdditionalPolinom.Polinom <> nil do
+  begin
+
+    if StartPrint then
+    begin
+      if (AdditionalPolinom.Polinom.Rate > 0) and (AdditionalPolinom.Polinom.Degree > 0) then
+        EResAddition.Text := FloatToStr(AdditionalPolinom.Polinom.Rate) + 'x^(' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+      else if (AdditionalPolinom.Polinom.Rate < 0) and (AdditionalPolinom.Polinom.Degree > 0) then
+        EResAddition.Text := '-' + FloatToStr(Abs(AdditionalPolinom.Polinom.Rate)) + 'x^(' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+      else if (AdditionalPolinom.Polinom.Rate > 0) and (AdditionalPolinom.Polinom.Degree < 0) then
+        EResAddition.Text := FloatToStr(AdditionalPolinom.Polinom.Rate) + 'x^(-' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+      else
+        EResAddition.Text := '-' + FloatToStr(Abs(AdditionalPolinom.Polinom.Rate)) + 'x^(-' + IntToStr(Abs(AdditionalPolinom.Polinom.Degree)) + ')';
+    end
+    else
+    begin
+      if (AdditionalPolinom.Polinom.Rate > 0) and (AdditionalPolinom.Polinom.Degree > 0) then
+        EResAddition.Text := EResAddition.Text + ' + ' + FloatToStr(AdditionalPolinom.Polinom.Rate) + 'x^(' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+      else if (AdditionalPolinom.Polinom.Rate < 0) and (AdditionalPolinom.Polinom.Degree > 0) then
+        EResAddition.Text := EResAddition.Text + ' - ' + FloatToStr(AdditionalPolinom.Polinom.Rate) + 'x^(' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+      else if (AdditionalPolinom.Polinom.Rate > 0) and (AdditionalPolinom.Polinom.Degree < 0) then
+        EResAddition.Text := EResAddition.Text + ' + ' + FloatToStr(AdditionalPolinom.Polinom.Rate) + 'x^(-' + IntToStr(AdditionalPolinom.Polinom.Degree) + ')'
+      else
+        EResAddition.Text := EResAddition.Text + ' - ' + FloatToStr(Abs(AdditionalPolinom.Polinom.Rate)) + 'x^(-' + IntToStr(Abs(AdditionalPolinom.Polinom.Degree)) + ')';
+    end;
+
+    AdditionalPolinom.Polinom := AdditionalPolinom.Polinom^.NextX;
+    StartPrint := False;
+  end;
+end;
+
+procedure TMainWorkPolinomia.Button9Click(Sender: TObject);
+begin
+  Application.Terminate;
+end;
+
+end.
